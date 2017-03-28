@@ -1,0 +1,6 @@
+echo "# NRF-MQTT" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git remote add origin https://github.com/sboganov/NRF-MQTT.git
+git push -u origin master
