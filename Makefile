@@ -17,7 +17,11 @@ CPUFLAGS=-march=armv8-a -mtune=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=hard
 CFLAGS=-march=armv8-a -mtune=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=hard -Ofast -Wall -pthread 
 
 
-rx-example: RF24Network.cpp rx-example.o
+bin/%.o : %.cpp
+	$(CXX) $(CPUFLAGS) $(CFLAGS) -pthread  -I/usr/local/include/RF24/.. -L/usr/local/lib -lrf24 $^
+
+
+rx-example: RF24Network.o rx-example.o
 	@echo "[Linking]"
 	$(CXX) $(CPUFLAGS) $(CFLAGS) -pthread  -I/usr/local/include/RF24/.. -L/usr/local/lib -lrf24 -o rx-example $^
 
