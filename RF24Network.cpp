@@ -60,14 +60,12 @@ void RF24Network::update(void)
   uint8_t pipe_num;
   while ( radio.isValid() && radio.available(&pipe_num) )
   {
-printf("AVAIL\r\n");
     // Dump the payloads until we've gotten everything
     int done = false;
     while (!done)
     {
       // Fetch the payload, and see if this was the last one.
       radio.read( frame_buffer, sizeof(frame_buffer) );
-printf("READ\r\n");
 	done = 1;
 
       // Read the beginning of the frame as the header

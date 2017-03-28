@@ -13,16 +13,20 @@
 
 CC=arm-linux-gnueabihf-gcc
 CXX=arm-linux-gnueabihf-g++
-CPUFLAGS=-march=armv8-a -mtune=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=hard
-CFLAGS=-march=armv8-a -mtune=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=hard -Ofast -Wall -pthread 
+CFLAGS=-Ofast -Wall -pthread 
 
+OBJ     = $(addprefix bin/,$(patsubst %.cpp, %.o, $(wildcard *.cpp)))
 
 bin/%.o : %.cpp
-	$(CXX) $(CPUFLAGS) $(CFLAGS) -pthread  -I/usr/local/include/RF24/.. -L/usr/local/lib -lrf24 $^
+	$(CXX) -c $(CPUFLAGS) $(CFLAGS) -I/usr/local/include/RF24/.. $^ -o $@
 
 
-rx-example: RF24Network.o rx-example.o
+nrf-mqtt: ${OBJ}
 	@echo "[Linking]"
-	$(CXX) $(CPUFLAGS) $(CFLAGS) -pthread  -I/usr/local/include/RF24/.. -L/usr/local/lib -lrf24 -o rx-example $^
+	$(CXX) $(CFLAGS) -pthread  -I/usr/local/include/RF24/.. -L/usr/local/lib -lrf24 -lmosquitto -o $@ $^
+
+clean:
+	rm bin/*
+	rm nrf-mqtt
 
 

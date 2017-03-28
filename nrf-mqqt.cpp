@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
+#include <mosquitto.h>
 
 /**
  * g++ -L/usr/lib main.cc -I/usr/include -o main -lrrd
@@ -29,16 +30,6 @@ struct RadioPacket {
 
 RadioPacket rPacket;
 
-// CE Pin, CSN Pin, SPI Speed
-
-// Setup for GPIO 22 CE and GPIO 25 CSN with SPI Speed @ 1Mhz
-// RF24 radio(RPI_V2_GPIO_P1_22, RPI_V2_GPIO_P1_18, BCM2835_SPI_SPEED_1MHZ);
-
-// Setup for GPIO 22 CE and CE0 CSN with SPI Speed @ 4Mhz
-//RF24 radio(RPI_V2_GPIO_P1_15, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_4MHZ); 
-
-// Setup for GPIO 22 CE and CE1 CSN with SPI Speed @ 8Mhz
-// RF24 radio(RPI_V2_GPIO_P1_12, BCM2835_SPI_CS0, BCM2835_SPI_SPEED_8MHZ);
 RF24 radio(2,10 );
 RF24Network network(radio);
 
@@ -46,6 +37,8 @@ pthread_mutex_t mutex;
 
 // Address of our node
 const uint16_t this_node = 0;
+#define mqtt_host "localhost"
+#define mqtt_port 1883
 
 
 void *processNetworkRequests(void *) {
@@ -107,6 +100,18 @@ void *processNetworkRequests(void *) {
 	return NULL;
 }
 
+
+void connect_callback(struct mosquitto *mosq, void *obj, int result)
+{
+	printf("connect callback\r\n");
+}
+	
+
+void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
+{
+	printf("CLL %s %s\r\n", message->topic, (char * )message->payload);
+}
+
 // Structure of our payload
 int main(int argc, char** argv) {
 
@@ -114,24 +119,22 @@ int main(int argc, char** argv) {
      	printf("Start\n");
 
 	radio.begin();
-	printf("Begin\n");
 	network.begin(/*channel*/0x5a, /*node address*/this_node);
 	radio.printDetails();
 	printf("-----------------------------------------------------\n");
-
-	pthread_t pid;
-//	pthread_create(&pid, NULL, &processNetworkRequests, NULL);
-
-//	pthread_mutex_init(&mutex, NULL);
+	mosquitto_lib_init();
+	struct mosquitto *mosq;
+	mosq = mosquitto_new("NRFBridge", true, NULL);
+	mosquitto_connect_callback_set(mosq, connect_callback);
+	mosquitto_message_callback_set(mosq, message_callback);
+	mosquitto_connect(mosq, mqtt_host, mqtt_port, 60);
+	mosquitto_subscribe(mosq, NULL, "#", 0);
 
 	while (1) {
-//		pthread_mutex_lock(&mutex);
+		mosquitto_loop(mosq, -1, 1);
 		network.update();
-//printf("UPDATE\r\n");
 		uint16_t nodes[255];
 		while (network.available()) {
-
-printf("AVAIL\r\n");
 			// If so, grab it and print it out
 			memset(&rPacket,0,sizeof(RadioPacket));
 			RF24NetworkHeader header;
@@ -141,16 +144,15 @@ printf("AVAIL\r\n");
 			static char buf[2048];
 			if( nodes[header.from_node] != header.id) {
 				nodes[header.from_node] = header.id;
-				sprintf(buf,"curl --silent -X PUT -H \"Content-Type: text/plain\" http://localhost/rest/items/Node_%o_%s/state -d \"%s\" &",header.from_node, rPacket.name, rPacket.data);
-				system(buf);
-				printf("CMD >> %s\n", buf);
+				sprintf(buf,"/stateUpdates/Node_%02d_%s/state", header.from_node, rPacket.name);
+				mosquitto_publish(mosq, NULL, buf, strlen(rPacket.data),rPacket.data, 0, false);
+
 			} else {
 				printf(".... ignored\n");
 			}
 	
 		}
-//		pthread_mutex_unlock(&mutex);
-		delay(10);
+		delay(1);
 	}
 	return 0;
 }
