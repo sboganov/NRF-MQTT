@@ -141,10 +141,11 @@ int main(int argc, char** argv) {
 			size_t len = network.read(header, &rPacket, sizeof(RadioPacket));
 			printf("Received packet # %s length=%d ", header.toString(),len);
 			printf( "name = %s data = '%s'\n", rPacket.name, rPacket.data);
-			static char buf[2048];
+
 			if( nodes[header.from_node] != header.id) {
 				nodes[header.from_node] = header.id;
-				sprintf(buf,"/stateUpdates/Node_%02d_%s/state", header.from_node, rPacket.name);
+				static char buf[2048];
+				snprintf(buf,2048,"/stateUpdates/Node_%02d_%s/state", header.from_node, rPacket.name);
 				mosquitto_publish(mosq, NULL, buf, strlen(rPacket.data),rPacket.data, 0, false);
 
 			} else {
