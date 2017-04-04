@@ -10,6 +10,8 @@
 #ifndef __RF24_CONFIG_H__
 #define __RF24_CONFIG_H__
 
+#include <stddef.h>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,6 +23,15 @@
 #define IF_SERIAL_DEBUG(x)
 #endif
 
+// Avoid spurious warnings
+#if ! defined( NATIVE ) && defined( ARDUINO )
+#undef PROGMEM
+#define PROGMEM __attribute__(( section(".progmem.data") ))
+#undef PSTR
+#define PSTR(s) (__extension__({static const char __c[] PROGMEM = (s); &__c[0];}))
+#endif
+
+// Progmem is Arduino-specific
 typedef char const prog_char;
 typedef uint16_t prog_uint16_t;
 #define PSTR(x) (x)

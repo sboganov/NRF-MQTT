@@ -9,6 +9,9 @@
 #include "RF24Network_config.h"
 #include <RF24/RF24.h>
 #include "RF24Network.h"
+ 
+#define min(a,b) (a) > (b) ? (b) : (a)
+#define boolean int
 
 uint16_t RF24NetworkHeader::next_id = 1;
 
@@ -56,17 +59,16 @@ void RF24Network::begin(uint8_t _channel, uint16_t _node_address )
 void RF24Network::update(void)
 {
   // if there is data ready
-//printf("VALID %d\r\n", radio.isValid());
   uint8_t pipe_num;
   while ( radio.isValid() && radio.available(&pipe_num) )
   {
     // Dump the payloads until we've gotten everything
-    int done = false;
+    boolean done = false;
     while (!done)
     {
       // Fetch the payload, and see if this was the last one.
       radio.read( frame_buffer, sizeof(frame_buffer) );
-	done = 1;
+	done = true;
 
       // Read the beginning of the frame as the header
       const RF24NetworkHeader& header = * reinterpret_cast<RF24NetworkHeader*>(frame_buffer);
@@ -176,7 +178,7 @@ size_t RF24Network::read(RF24NetworkHeader& header,void* message, size_t maxlen)
     if (maxlen > 0)
     {
       // How much buffer size should we actually copy?
-      bufsize = frame_size-sizeof(RF24NetworkHeader);
+      bufsize = min(maxlen,frame_size-sizeof(RF24NetworkHeader));
 
       // Copy the next available frame from the queue into the provided buffer
       memcpy(message,frame+sizeof(RF24NetworkHeader),bufsize);
@@ -198,7 +200,7 @@ bool RF24Network::write(RF24NetworkHeader& header,const void* message, size_t le
   // Build the full frame to send
   memcpy(frame_buffer,&header,sizeof(RF24NetworkHeader));
   if (len)
-    memcpy(frame_buffer + sizeof(RF24NetworkHeader),message,len);
+    memcpy(frame_buffer + sizeof(RF24NetworkHeader),message,min(frame_size-sizeof(RF24NetworkHeader),len));
 
   IF_SERIAL_DEBUG(printf_P(PSTR("%lu: NET Sending %s\n\r"),millis(),header.toString()));
   if (len)

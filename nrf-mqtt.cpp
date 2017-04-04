@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <iostream>
+#include "RCSwitch.h"
 #include <RF24/RF24.h>
 #include "RF24Network.h"
 #include <ctime>
@@ -41,66 +42,6 @@ const uint16_t this_node = 0;
 #define mqtt_port 1883
 
 
-void *processNetworkRequests(void *) {
-	int sockfd, newsockfd, portno = 51717, clilen;
-     	struct sockaddr_in serv_addr, cli_addr;
-
-	printf( "using port #%d\n", portno );
-    
-     	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-     	if (sockfd < 0) 
-         perror( const_cast<char *>("ERROR opening socket") );
-     	bzero((char *) &serv_addr, sizeof(serv_addr));
-
-     	serv_addr.sin_family = AF_INET;
-     	serv_addr.sin_addr.s_addr = INADDR_ANY;
-     	serv_addr.sin_port = htons( portno );
-     	if (bind(sockfd, (struct sockaddr *) &serv_addr,
-              sizeof(serv_addr)) < 0)  {
-       		perror( const_cast<char *>( "ERROR on binding" ) );
-		exit(1);
-	}
-     	listen(sockfd,5);
-     	clilen = sizeof(cli_addr);
-
-
-	while( 1 ) {
-		printf( "waiting for new client...\n" );
-        	if ( ( newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, (socklen_t*) &clilen) ) > 0 ) {
-       			write(1, "opened new communication with client\n",38 );
-
-          		//---- wait for a number from client ---
-			char buffer[256];
-  			int n;
-			
-			if ( (n = read(newsockfd,buffer,256) ) <= 0 )
-				break;
-			buffer[n] = '\0';
-			printf("Receive data: '%s'\n", buffer);
-			printf("Send test ping packet........................\n");
-			memset(&rPacket,0,sizeof(RadioPacket));
-
-			int nodeId = 4;
-			char name[11];
-			char value[11];
-			sscanf(buffer, "%d %s %s", &nodeId, name, value);
-	
-			pthread_mutex_lock(&mutex);
-			RF24NetworkHeader sendHeader(nodeId);
-	
-			strcpy(rPacket.name,name);
-			strcpy(rPacket.data,value);
-			int ok = network.write(sendHeader, &rPacket, sizeof(RadioPacket));
-			printf("Status = %d\n", ok );
-			pthread_mutex_unlock(&mutex);
-
-        		close( newsockfd );
-		}
-	}
-	return NULL;
-}
-
-
 void connect_callback(struct mosquitto *mosq, void *obj, int result)
 {
 	printf("connect callback\r\n");
@@ -109,7 +50,31 @@ void connect_callback(struct mosquitto *mosq, void *obj, int result)
 
 void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
 {
-	printf("CLL %s %s\r\n", message->topic, (char * )message->payload);
+	static char buf[1024];
+	strncpy(buf,&(message->topic[9]), 1024);
+	char *f = strchr(buf,'_');
+	if(f != NULL) {
+		int nodeId;
+		sscanf(&f[1],"%d",&nodeId);
+		char *name = strchr(&f[1],'_') + 1 ;
+		RF24NetworkHeader sendHeader(nodeId);
+	
+		strcpy(rPacket.name,name);
+		strcpy(rPacket.data,(char *)message->payload);
+		int done = false;
+		int count = 0;
+		do {
+			done = network.write(sendHeader, &rPacket, sizeof(RadioPacket));
+			if(!done) {
+				delay(300);
+
+				count++;
+				printf("Resend: %d\n",count);
+			}
+		} while(!done && count < 10);
+		printf("SENDCMD Node: %d %s=%s Status = %d\n", nodeId,name,rPacket.data, done );
+	}
+
 }
 
 // Structure of our payload
@@ -117,6 +82,7 @@ int main(int argc, char** argv) {
 
 
      	printf("Start\n");
+	wiringPiSetup();
 
 	radio.begin();
 	network.begin(/*channel*/0x5a, /*node address*/this_node);
@@ -128,7 +94,7 @@ int main(int argc, char** argv) {
 	mosquitto_connect_callback_set(mosq, connect_callback);
 	mosquitto_message_callback_set(mosq, message_callback);
 	mosquitto_connect(mosq, mqtt_host, mqtt_port, 60);
-	mosquitto_subscribe(mosq, NULL, "#", 0);
+	mosquitto_subscribe(mosq, NULL, "/command/#", 0);
 
 	while (1) {
 		mosquitto_loop(mosq, -1, 1);
@@ -153,7 +119,6 @@ int main(int argc, char** argv) {
 			}
 	
 		}
-		delay(1);
 	}
 	return 0;
 }

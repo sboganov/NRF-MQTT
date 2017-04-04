@@ -13,7 +13,7 @@
 
 CC=arm-linux-gnueabihf-gcc
 CXX=arm-linux-gnueabihf-g++
-CFLAGS=-Ofast -Wall -pthread 
+CFLAGS=-Ofast -Wall -pthread -lwiringPi
 
 OBJ     = $(addprefix bin/,$(patsubst %.cpp, %.o, $(wildcard *.cpp)))
 
